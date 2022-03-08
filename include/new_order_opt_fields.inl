@@ -1,5 +1,5 @@
 #ifndef FIELD
-#  error You need to define FIELD macro
+#error You need to define FIELD macro
 #else
 FIELD(price, 1, 4)
 FIELD(ord_type, 1, 16)

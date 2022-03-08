@@ -32,6 +32,11 @@ inline unsigned char * encode_binary4(unsigned char * start, const uint32_t valu
     return encode(start, value);
 }
 
+inline unsigned char * encode_binary2(unsigned char * start, const uint16_t value)
+{
+    return encode(start, value);
+}
+
 inline unsigned char * encode_price(unsigned char * start, const double value)
 {
     const double order = 10000;

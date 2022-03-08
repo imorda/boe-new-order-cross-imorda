@@ -33,6 +33,58 @@ constexpr size_t new_order_opt_fields_size()
             ;
 }
 
+constexpr size_t new_order_cross_bitfield_num()
+{
+    return std::max({0
+#define FIELD(_, n, __) , n
+#include "new_order_cross_repeated_opt_fields.inl"
+#define FIELD(_, n, __) , n
+#include "new_order_cross_single_opt_fields.inl"
+    });
+}
+
+constexpr size_t new_order_cross_multileg_bitfield_num()
+{
+    return std::max({static_cast<int>(new_order_cross_bitfield_num())
+#define FIELD(_, n, __) , n
+#include "new_order_cross_multileg_repeated_opt_fields.inl"
+#define FIELD(_, n, __) , n
+#include "new_order_cross_multileg_single_opt_fields.inl"
+    });
+}
+
+constexpr size_t new_order_cross_single_opt_fields_size()
+{
+    return 0
+#define FIELD(name, _, __) +name##_field_size
+#include "new_order_cross_single_opt_fields.inl"
+            ;
+}
+
+constexpr size_t new_order_cross_multileg_single_opt_fields_size()
+{
+    return new_order_cross_single_opt_fields_size()
+#define FIELD(name, _, __) +name##_field_size
+#include "new_order_cross_multileg_single_opt_fields.inl"
+            ;
+}
+
+constexpr size_t new_order_cross_repeating_opt_fields_size()
+{
+    return 0
+#define FIELD(name, _, __) +name##_field_size
+#include "new_order_cross_repeated_opt_fields.inl"
+            ;
+}
+
+constexpr size_t new_order_cross_multileg_repeating_opt_fields_size()
+{
+    return new_order_cross_repeating_opt_fields_size()
+#define FIELD(name, _, __) +name##_field_size
+#include "new_order_cross_multileg_repeated_opt_fields.inl"
+            ;
+}
+
 enum class RequestType
 {
     New,
@@ -40,16 +92,25 @@ enum class RequestType
     NewCrossMultileg
 };
 
-constexpr size_t calculate_size(const RequestType type)
+constexpr size_t calculate_size(const RequestType type, const size_t contra_orders_count)
 {
     switch (type) {
     case RequestType::New:
         return 36 + new_order_bitfield_num() + new_order_opt_fields_size();
     case RequestType::NewCross:
-        return 0;
+        return 45 + new_order_cross_bitfield_num() + 2 +
+                (contra_orders_count + 1) * (31 + new_order_cross_repeating_opt_fields_size()) +
+                new_order_cross_single_opt_fields_size();
     case RequestType::NewCrossMultileg:
-        return 0;
+        return 45 + new_order_cross_multileg_bitfield_num() + 2 +
+                (contra_orders_count + 1) * (31 + new_order_cross_multileg_repeating_opt_fields_size()) +
+                new_order_cross_multileg_single_opt_fields_size();
     }
+}
+
+constexpr size_t calculate_size(const RequestType type)
+{
+    return calculate_size(type, 0);
 }
 
 enum class Side

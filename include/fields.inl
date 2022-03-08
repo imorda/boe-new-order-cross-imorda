@@ -1,5 +1,5 @@
 #if !defined(FIELD) || !defined(VAR_FIELD)
-#  error You need to define FIELD and VAR_FIELD macro
+#error You need to define FIELD and VAR_FIELD macro
 #else
 
 VAR_FIELD(account, 16)
@@ -12,6 +12,8 @@ FIELD(price, price, double)
 FIELD(side, char, char)
 VAR_FIELD(symbol, 8)
 FIELD(time_in_force, char, char)
+FIELD(algo_ind, char, char)
+VAR_FIELD(leg_pos_effect, 12)
 
 #undef FIELD
 #undef VAR_FIELD

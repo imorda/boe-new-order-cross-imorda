@@ -18,17 +18,77 @@ void encode_new_order_opt_fields(unsigned char * bitfield_start,
 #include "new_order_opt_fields.inl"
 }
 
+unsigned char * declare_new_order_cross_opt_fields(unsigned char * bitfield_start)
+{
+#define FIELD(name, bitfield_num, bit) \
+    set_opt_field_bit(bitfield_start, bitfield_num, bit);
+#include "new_order_cross_single_opt_fields.inl"
+#define FIELD(name, bitfield_num, bit) \
+    set_opt_field_bit(bitfield_start, bitfield_num, bit);
+#include "new_order_cross_repeated_opt_fields.inl"
+
+    return bitfield_start + new_order_cross_bitfield_num();
+}
+
+unsigned char * encode_new_order_cross_repeated_opt_fields(unsigned char * p,
+                                                           const char algo_ind)
+{
+#define FIELD(name, bitfield_num, bit) \
+    p = encode_field_##name(p, name);
+#include "new_order_cross_repeated_opt_fields.inl"
+    return p;
+}
+
+unsigned char * encode_new_order_cross_single_opt_fields(unsigned char * p,
+                                                         const std::string & symbol)
+{
+#define FIELD(name, bitfield_num, bit) \
+    p = encode_field_##name(p, name);
+#include "new_order_cross_single_opt_fields.inl"
+    return p;
+}
+
+unsigned char * declare_new_order_cross_multileg_opt_fields(unsigned char * bitfield_start)
+{
+#define FIELD(name, bitfield_num, bit) \
+    set_opt_field_bit(bitfield_start, bitfield_num, bit);
+#include "new_order_cross_multileg_single_opt_fields.inl"
+#define FIELD(name, bitfield_num, bit) \
+    set_opt_field_bit(bitfield_start, bitfield_num, bit);
+#include "new_order_cross_multileg_repeated_opt_fields.inl"
+
+    return bitfield_start + new_order_cross_multileg_bitfield_num();
+}
+
+unsigned char * encode_new_order_cross_multileg_repeated_opt_fields(unsigned char * p,
+                                                                    const char algo_ind,
+                                                                    const std::string & leg_pos_effect)
+{
+#define FIELD(name, bitfield_num, bit) \
+    p = encode_field_##name(p, name);
+#include "new_order_cross_multileg_repeated_opt_fields.inl"
+    return p;
+}
+
+unsigned char * encode_new_order_cross_multileg_single_opt_fields(unsigned char * p,
+                                                                  const std::string & symbol)
+{
+#define FIELD(name, bitfield_num, bit) \
+    p = encode_field_##name(p, name);
+#include "new_order_cross_multileg_single_opt_fields.inl"
+    return p;
+}
+
 uint8_t encode_request_type(const RequestType type)
 {
     switch (type) {
     case RequestType::New:
         return 0x38;
     case RequestType::NewCross:
-        return 0;
+        return 0x7A;
     case RequestType::NewCrossMultileg:
-        return 0;
+        return 0x85;
     }
-    return 0;
 }
 
 unsigned char * add_request_header(unsigned char * start, unsigned length, const RequestType type, unsigned seq_no)
@@ -58,6 +118,11 @@ char convert_ord_type(const OrdType ord_type)
     case OrdType::Pegged: return 'P';
     }
     return 0;
+}
+
+char convert_algo_ind(bool indicator)
+{
+    return indicator ? 'Y' : 'N';
 }
 
 char convert_time_in_force(const TimeInForce time_in_force)
@@ -142,28 +207,105 @@ std::array<unsigned char, calculate_size(RequestType::New)> create_new_order_req
     return msg;
 }
 
+unsigned char * encode_cross_orders(unsigned char * p, const Order & order)
+{
+    p = encode_char(p, convert_side(order.side));
+    p = encode_binary4(p, static_cast<uint32_t>(order.volume));
+    p = encode_text(p, order.cl_ord_id, 20);
+    p = encode_char(p, convert_capacity(order.capacity));
+    p = encode_text(p, order.clearing_firm, 4);
+    p = encode_char(p, convert_account_type(order.account_type));
+
+    p = encode_new_order_cross_repeated_opt_fields(p,
+                                                   convert_algo_ind(order.algorithmic_indicator));
+    return p;
+}
+unsigned char * encode_new_order_cross_commons(unsigned char * p,
+                                               const std::string & cross_id,
+                                               double price,
+                                               const Order & agency_order,
+                                               const uint8_t bitfield_len)
+{
+    p = encode_text(p, cross_id, 20);
+    p = encode_char(p, '1');
+    p = encode_char(p, convert_side(agency_order.side));
+    p = encode_price(p, price);
+    p = encode_binary4(p, static_cast<uint32_t>(agency_order.volume));
+    p = encode(p, bitfield_len);
+    return p;
+}
 std::vector<unsigned char> create_new_order_cross_request(
-        unsigned /*seq_no*/,
-        const std::string & /*cross_id*/,
-        double /*price*/,
-        const std::string & /*symbol*/,
-        const Order & /*agency_order*/,
-        const std::vector<Order> & /*contra_orders*/)
+        unsigned seq_no,
+        const std::string & cross_id,
+        double price,
+        const std::string & symbol,
+        const Order & agency_order,
+        const std::vector<Order> & contra_orders)
 {
     std::vector<unsigned char> msg;
-    msg.resize(calculate_size(RequestType::NewCross));
+    msg.resize(calculate_size(RequestType::NewCross, contra_orders.size()));
+
+    auto * p = add_request_header(&msg[0], msg.size() - 2, RequestType::NewCross, seq_no);
+    p = encode_new_order_cross_commons(p,
+                                       cross_id,
+                                       price,
+                                       agency_order,
+                                       new_order_cross_bitfield_num());
+    p = declare_new_order_cross_opt_fields(p);
+    p = encode_binary2(p, static_cast<uint16_t>(1 + contra_orders.size()));
+
+    p = encode_cross_orders(p, agency_order);
+    for (auto i : contra_orders) {
+        p = encode_cross_orders(p, i);
+    }
+
+    encode_new_order_cross_single_opt_fields(p,
+                                             symbol);
+
     return msg;
 }
 
+unsigned char * encode_cross_multileg_orders(unsigned char * p, const ComplexOrder & order)
+{
+    p = encode_char(p, convert_side(order.order.side));
+    p = encode_binary4(p, static_cast<uint32_t>(order.order.volume));
+    p = encode_text(p, order.order.cl_ord_id, 20);
+    p = encode_char(p, convert_capacity(order.order.capacity));
+    p = encode_text(p, order.order.clearing_firm, 4);
+    p = encode_char(p, convert_account_type(order.order.account_type));
+
+    p = encode_new_order_cross_multileg_repeated_opt_fields(p,
+                                                            convert_algo_ind(order.order.algorithmic_indicator),
+                                                            convert_legs(order.legs));
+    return p;
+}
 std::vector<unsigned char> create_new_order_cross_multileg_request(
-        unsigned /*seq_no*/,
-        const std::string & /*cross_id*/,
-        double /*price*/,
-        const std::string & /*symbol*/,
-        const ComplexOrder & /*agency_order*/,
-        const std::vector<ComplexOrder> & /*contra_orders*/)
+        unsigned seq_no,
+        const std::string & cross_id,
+        double price,
+        const std::string & symbol,
+        const ComplexOrder & agency_order,
+        const std::vector<ComplexOrder> & contra_orders)
 {
     std::vector<unsigned char> msg;
-    msg.resize(calculate_size(RequestType::NewCrossMultileg));
+    msg.resize(calculate_size(RequestType::NewCrossMultileg, contra_orders.size()));
+
+    auto * p = add_request_header(&msg[0], msg.size() - 2, RequestType::NewCrossMultileg, seq_no);
+
+    p = encode_new_order_cross_commons(p,
+                                       cross_id,
+                                       price,
+                                       agency_order.order,
+                                       new_order_cross_multileg_bitfield_num());
+    p = declare_new_order_cross_multileg_opt_fields(p);
+    p = encode_binary2(p, static_cast<uint16_t>(1 + contra_orders.size()));
+
+    p = encode_cross_multileg_orders(p, agency_order);
+    for (auto i : contra_orders) {
+        p = encode_cross_multileg_orders(p, i);
+    }
+    encode_new_order_cross_multileg_single_opt_fields(p,
+                                                      symbol);
+
     return msg;
 }
