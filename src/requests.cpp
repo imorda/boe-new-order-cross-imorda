@@ -255,7 +255,7 @@ std::vector<unsigned char> create_new_order_cross_request(
     p = encode_binary2(p, static_cast<uint16_t>(1 + contra_orders.size()));
 
     p = encode_cross_orders(p, agency_order);
-    for (auto i : contra_orders) {
+    for (const auto & i : contra_orders) {
         p = encode_cross_orders(p, i);
     }
 
@@ -301,7 +301,7 @@ std::vector<unsigned char> create_new_order_cross_multileg_request(
     p = encode_binary2(p, static_cast<uint16_t>(1 + contra_orders.size()));
 
     p = encode_cross_multileg_orders(p, agency_order);
-    for (auto i : contra_orders) {
+    for (const auto & i : contra_orders) {
         p = encode_cross_multileg_orders(p, i);
     }
     encode_new_order_cross_multileg_single_opt_fields(p,
